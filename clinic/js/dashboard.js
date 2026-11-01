@@ -23,8 +23,11 @@ function resolveRange() {
 /* 그날의 공휴일·휴진·날씨·메모 설명 (툴팁, 표에서 공용) */
 function dayNotes(d, { html = true, weather = true } = {}) {
   const parts = [];
-  const st = dayStatus(d), hol = holidayName(d), r = DB.daily[d];
-  if (hol) parts.push(html ? `<span class="tag holiday">🎌 ${escapeHtml(hol)}</span>` : `공휴일(${hol})`);
+  const st = dayStatus(d), h = holidayInfo(d), r = DB.daily[d];
+  if (h) {
+    const note = h.kind !== 'legal' && isHolidayOpen(d) ? ' · 진료' : '';
+    parts.push(html ? `<span class="tag holiday">🎌 ${escapeHtml(h.name)}${note}</span>` : `${HOLIDAY_KIND_LABEL[h.kind]}(${h.name}${note})`);
+  }
   if (st === 'closed') parts.push(html ? '<span class="tag closed">휴진</span>' : '휴진');
   else if (st === 'regular') parts.push(html ? '<span class="tag closed">정기 휴진</span>' : '정기 휴진');
   if (weather) { const w = weatherOf(d); if (w) parts.push(html ? escapeHtml(weatherText(w)) : weatherText(w, true)); }
@@ -147,7 +150,7 @@ function renderDailyChart(from, to) {
   const bands = [];
   days.forEach((d, i) => {
     const st = dayStatus(d);
-    if (holidayName(d) && st !== 'open') bands.push({ i, kind: 'holiday' });
+    if (st === 'holiday' || (st === 'closed' && holidayName(d))) bands.push({ i, kind: 'holiday' });
     else if (st === 'closed' || st === 'regular') bands.push({ i, kind: 'closed' });
   });
   lineChart($('chDaily'), {
@@ -300,8 +303,8 @@ function renderInsights(recs, prev, from, to) {
     const items = low.slice(-6).map((r) => { const why = lowDayReason(r.date); return `${shortDate(r.date)}(${WD[weekday(r.date)]}) ${r.patients}명${why.length ? ` — ${escapeHtml(why.join(', '))}` : ''}`; });
     out.push(`같은 요일 평균보다 30% 이상 적었던 날이 <b>${low.length}일</b> 있었습니다: ${items.join(' · ')}${low.length > 6 ? ' 외' : ''}.`);
   }
-  const hol = daysBetween(from, to > TODAY ? TODAY : to).filter((d) => holidayName(d) && !S().closedWeekdays.includes(weekday(d)));
-  if (hol.length) out.push(`기간 중 평일 공휴일이 <b>${hol.length}일</b>(${hol.slice(0, 5).map((d) => `${shortDate(d)} ${holidayName(d)}`).join(', ')}${hol.length > 5 ? ' 외' : ''}) 있었습니다.`);
+  const hol = daysBetween(from, to > TODAY ? TODAY : to).filter((d) => isHolidayOff(d) && !S().closedWeekdays.includes(weekday(d)));
+  if (hol.length) out.push(`기간 중 평일 공휴일 휴진이 <b>${hol.length}일</b>(${hol.slice(0, 5).map((d) => `${shortDate(d)} ${holidayName(d)}`).join(', ')}${hol.length > 5 ? ' 외' : ''}) 있었습니다.`);
   // 전년 동월 (기간 내 마지막 완결 월)
   const lastFull = monthsBetween(from, to).filter((m) => m < TODAY.slice(0, 7)).pop();
   if (lastFull) {

@@ -13,7 +13,7 @@ function buildMonthSummary(m) {
   const best = recs.length ? recs.reduce((x, y) => y.patients > x.patients ? y : x) : null;
   const worst = recs.length ? recs.reduce((x, y) => y.patients < x.patients ? y : x) : null;
   const days = daysBetween(`${m}-01`, `${m}-${pad(daysInMonth(m))}`);
-  const holidays = days.filter((d) => holidayName(d)).map((d) => `${shortDate(d)} ${holidayName(d)}`);
+  const holidays = days.filter((d) => holidayName(d)).map((d) => `${shortDate(d)} ${holidayName(d)}${isHolidayOpen(d) ? '(진료)' : ''}`);
   const wdAvg = Object.fromEntries(WD_ORDER.map((w) => [w, byWd[WD[w] + '요일']]));
   const unusual = recs.filter((r) => wdAvg[weekday(r.date)] && Math.abs(r.patients - wdAvg[weekday(r.date)]) / wdAvg[weekday(r.date)] >= 0.3)
     .map((r) => {

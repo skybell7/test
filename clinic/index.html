@@ -349,13 +349,13 @@
           <div class="input-unit"><input class="big-input mid num" id="sFixed" inputmode="numeric" autocomplete="off"><span>원</span></div>
         </div>
         <div class="field">
-          <label for="sHolidays">추가 공휴일·임시공휴일 <small>한 줄에 하나씩 "2026-05-01 근로자의 날"</small></label>
-          <textarea class="text-input" id="sHolidays" placeholder="2026-05-01 근로자의 날"></textarea>
+          <label for="sHolidays">추가 공휴일 <small>한 줄에 하나씩 · 이름에 '임시'나 '대체'가 들어가면 진료 여부를 고를 수 있습니다</small></label>
+          <textarea class="text-input" id="sHolidays" placeholder="2026-06-03 임시공휴일"></textarea>
         </div>
         <button class="btn-primary btn" id="saveSettings">설정 저장</button>
         <div class="status" id="settingsStatus"></div>
-        <p class="hint">※ 공휴일은 2024~2027년 법정공휴일·대체공휴일이 내장되어 있습니다. 새로 지정되는 임시공휴일은 위에 추가해 주세요.<br>
-          ※ 날씨는 Open-Meteo 무료 서비스에서 선택한 <b>시 단위 지역 좌표</b>로만 조회하며, 진료 데이터는 전송하지 않습니다.</p>
+        <p class="hint" id="sourceHint"></p>
+        <button class="btn" id="reloadWeather" style="font-size:15px">🔄 날씨 다시 불러오기</button>
       </div>
 
       <div class="card">
@@ -373,6 +373,24 @@
         </div>
         <div class="status" id="dataStatus"></div>
       </div>
+    </div>
+
+    <div class="card mb">
+      <div class="chart-head">
+        <h2>공휴일 및 진료 여부</h2>
+        <div class="date-row" style="margin-left:auto">
+          <button class="btn" id="hPrev">◀</button>
+          <b id="hYear" style="font-size:20px;min-width:80px;text-align:center"></b>
+          <button class="btn" id="hNext">▶</button>
+        </div>
+      </div>
+      <p class="sub" id="hSource" style="margin-top:6px"></p>
+      <table>
+        <thead><tr><th>날짜</th><th class="left">공휴일</th><th class="left">종류</th><th class="left">진료 여부</th></tr></thead>
+        <tbody id="holidayBody"></tbody>
+      </table>
+      <p class="hint">법정공휴일은 모두 휴진으로 처리합니다. 대체공휴일·임시공휴일은 기본 휴진이며, 진료하는 날은 체크해 주세요 (바로 저장됩니다).<br>
+        진료하는 날로 바꾸면 목표·월말 예상·손익분기 계산에서 진료일로 계산되고, 그래프의 공휴일 음영이 사라집니다.</p>
     </div>
 
     <div class="grid-2">

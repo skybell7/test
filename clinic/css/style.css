@@ -185,3 +185,4 @@ input[type=file] { display: none; }
   main { padding: 0; }
   .card, .kpi { break-inside: avoid; }
 }
+.btn-mini { font-size: 14px; padding: 3px 10px; margin-left: 6px; vertical-align: 1px; }

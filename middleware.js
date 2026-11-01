@@ -4,7 +4,7 @@ import { next } from '@vercel/functions';
 import { isAuthorized } from './api/_lib/auth.js';
 
 export const config = {
-  matcher: ['/clinic', '/clinic/:path*', '/api/report'],
+  matcher: ['/clinic', '/clinic/:path*', '/api/report', '/api/weather', '/api/holidays'],
 };
 
 const PRIVATE_HEADERS = {

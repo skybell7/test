@@ -48,11 +48,18 @@ function updateTotal() {
 function renderDayInfo() {
   const d = $('dDate').value; if (!d) return;
   const parts = [`<span>${dateLabel(d)}</span>`];
-  const hol = holidayName(d);
-  if (hol) parts.push(`<span class="hol">🎌 ${escapeHtml(hol)}</span>`);
+  const hol = holidayInfo(d);
+  if (hol) {
+    parts.push(`<span class="hol">🎌 ${escapeHtml(hol.name)}</span>`);
+    if (hol.kind === 'legal') parts.push('<span>법정공휴일 · 휴진</span>');
+    else parts.push(`<span>${hol.name.startsWith(HOLIDAY_KIND_LABEL[hol.kind]) ? '' : HOLIDAY_KIND_LABEL[hol.kind] + ' · '}<b>${isHolidayOpen(d) ? '진료' : '휴진'}</b>
+      <button class="btn btn-mini" id="toggleHolOpen">${isHolidayOpen(d) ? '휴진으로 변경' : '진료하는 날로 변경'}</button></span>`);
+  }
   if (!DB.daily[d] && S().closedWeekdays.includes(weekday(d))) parts.push('<span>정기 휴진 요일</span>');
   const w = weatherOf(d); if (w) parts.push(`<span>${escapeHtml(weatherText(w, true))}</span>`);
   $('dayInfo').innerHTML = parts.join('');
+  const tb = $('toggleHolOpen');
+  if (tb) tb.onclick = () => { setHolidayOpen(d, !isHolidayOpen(d)); renderDayInfo(); renderRecent(); };
 }
 function loadDaily() {
   const d = $('dDate').value;
@@ -212,7 +219,38 @@ function loadSettings() {
   setNum($('sTarget'), s.monthlyTarget);
   setNum($('sFixed'), s.fixedCostOverride);
   $('sHolidays').value = s.extraHolidays || '';
+  renderSourceHint(); renderHolidayTable();
 }
+function renderSourceHint() {
+  $('sourceHint').innerHTML = `※ 공휴일: <b>${holidaySource(String(holYear))}</b> (대한민국 기준)<br>※ ${weatherSourceText()}<br>
+    ※ 날씨 조회에는 선택한 <b>시 단위 지역</b>만 전송하며, 진료 데이터는 전송하지 않습니다.`;
+}
+let holYear = Number(TODAY.slice(0, 4));
+function renderHolidayTable() {
+  $('hYear').textContent = `${holYear}년`;
+  $('hSource').textContent = `출처: ${holidaySource(String(holYear))} · 대한민국 공휴일 기준`;
+  const list = holidaysInYear(holYear);
+  $('holidayBody').innerHTML = list.map((h) => {
+    const wd = weekday(h.date);
+    const weekendNote = S().closedWeekdays.includes(wd) ? ' <span class="muted">(정기 휴진 요일)</span>' : '';
+    const ctl = h.kind === 'legal'
+      ? '<span class="muted">휴진 (고정)</span>'
+      : `<label style="display:inline-flex;gap:8px;align-items:center;cursor:pointer;font-weight:600"><input type="checkbox" data-hol="${h.date}" ${isHolidayOpen(h.date) ? 'checked' : ''} style="width:18px;height:18px"> 이 날 진료함</label>`;
+    return `<tr><td class="${wd === 0 ? 'sun' : wd === 6 ? 'sat' : ''}">${dateLabel(h.date)}</td><td class="left">${escapeHtml(h.name)}${weekendNote}</td>
+      <td class="left"><span class="tag ${h.kind === 'legal' ? 'holiday' : 'closed'}">${HOLIDAY_KIND_LABEL[h.kind]}</span></td><td class="left">${ctl}</td></tr>`;
+  }).join('') || `<tr><td colspan="4" class="muted">${holYear}년 공휴일 정보가 없습니다. 웹 배포 + 공공데이터 키를 설정하거나 위의 '추가 공휴일'에 입력해 주세요.</td></tr>`;
+  document.querySelectorAll('[data-hol]').forEach((c) => c.onchange = () => {
+    setHolidayOpen(c.dataset.hol, c.checked);
+    flash($('settingsStatus'), `✔ ${dateLabel(c.dataset.hol)}: ${c.checked ? '진료하는 날로' : '휴진으로'} 저장했습니다.`);
+  });
+}
+$('hPrev').onclick = () => { holYear--; refreshHolidays([holYear]).then(() => renderHolidayTable()); renderHolidayTable(); };
+$('hNext').onclick = () => { holYear++; refreshHolidays([holYear]).then(() => renderHolidayTable()); renderHolidayTable(); };
+$('reloadWeather').onclick = () => {
+  resetWeather(); recentWxTried = false;
+  flash($('settingsStatus'), '날씨 정보를 다시 불러옵니다…');
+  ensureWeather(addDays(TODAY, -13), TODAY).then(() => { renderSourceHint(); flash($('settingsStatus'), '✔ 최근 날씨를 다시 불러왔습니다. (나머지는 화면을 열 때 불러옵니다)'); });
+};
 $('saveSettings').onclick = () => {
   const fee = parseFloat($('sCardFee').value);
   if (isNaN(fee) || fee < 0 || fee > 10) return flash($('settingsStatus'), '카드 수수료율은 0~10 사이 숫자로 입력해 주세요.', false);
@@ -224,7 +262,7 @@ $('saveSettings').onclick = () => {
     monthlyTarget: numVal($('sTarget')), fixedCostOverride: numVal($('sFixed')),
     extraHolidays: $('sHolidays').value.trim(),
   });
-  persist(); recentWxTried = false;
+  persist(); recentWxTried = false; renderHolidayTable(); renderSourceHint();
   flash($('settingsStatus'), '✔ 설정을 저장했습니다.');
 };
 
@@ -292,7 +330,7 @@ $('sampleData').onclick = () => {
   for (let d = start; d <= TODAY; d = addDays(d, 1)) {
     const w = weekday(d);
     if (S().closedWeekdays.includes(w)) continue;
-    if (holidayName(d)) { if (rnd() < 0.85) continue; }
+    if (isHolidayOff(d)) continue;
     if (rnd() < 0.008) { DB.daily[d] = { closed: true, memo: '원장 학회' }; continue; }
     const dt = parseYmd(d), month = dt.getMonth();
     const season = (month === 11 || month <= 1) ? 1.18 : (month >= 6 && month <= 7 ? 0.88 : 1);
@@ -335,4 +373,13 @@ if (location.protocol.startsWith('http')) {
 
 /* ---------- 시작 ---------- */
 loadDaily(); renderRecent(); refreshRecentWeather(); loadMonthly();
+// 웹 배포 시 한국천문연구원 공휴일 갱신 (작년·올해·내년)
+{
+  const y = Number(TODAY.slice(0, 4));
+  refreshHolidays([y - 1, y, y + 1]).then((ch) => {
+    if (!ch) return;
+    const active = document.querySelector('nav button.active')?.dataset.tab;
+    if (active === 'daily') { renderDayInfo(); renderRecent(); } else showTab(active);
+  });
+}
 $('dPatients').focus();

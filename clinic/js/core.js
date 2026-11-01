@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS = {
   monthlyTarget: null,      // 월 목표 총수입 (원)
   fixedCostOverride: null,  // 월 고정비 직접 지정 (원)
   extraHolidays: '',        // 추가 공휴일 "YYYY-MM-DD 이름" 줄 단위
+  openHolidays: [],         // 대체·임시공휴일 중 '진료하는 날'로 지정한 날짜
 };
 let DB = loadDB();
 function loadDB() {
@@ -65,14 +66,18 @@ function download(name, text, type) {
   a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-/* ---------- 공휴일 (대한민국, 대체공휴일·임시공휴일 포함) ----------
-   이후 연도나 새로 지정된 임시공휴일은 ⑤ 설정의 '추가 공휴일'에 입력하세요. */
+/* ---------- 공휴일 (대한민국 기준) ----------
+   1순위: 한국천문연구원 특일정보(웹 배포 + DATA_GO_KR_KEY 설정 시, /api/holidays 로 자동 갱신)
+   2순위: 아래 내장 목록 (2024~2027)
+   + ⑤ 설정의 '추가 공휴일'
+   종류: legal(법정공휴일 — 항상 휴진) / substitute(대체공휴일) / temporary(임시공휴일)
+         대체·임시공휴일은 기본 휴진이지만 ⑤ 설정 또는 ① 일일 입력에서 '진료'로 바꿀 수 있습니다. */
 const HOLIDAYS = {
   // 2024
   '2024-01-01': '신정', '2024-02-09': '설날 연휴', '2024-02-10': '설날', '2024-02-11': '설날 연휴', '2024-02-12': '대체공휴일(설날)',
   '2024-03-01': '삼일절', '2024-04-10': '국회의원선거', '2024-05-05': '어린이날', '2024-05-06': '대체공휴일(어린이날)',
   '2024-05-15': '부처님오신날', '2024-06-06': '현충일', '2024-08-15': '광복절', '2024-09-16': '추석 연휴', '2024-09-17': '추석',
-  '2024-09-18': '추석 연휴', '2024-10-01': '국군의 날(임시)', '2024-10-03': '개천절', '2024-10-09': '한글날', '2024-12-25': '성탄절',
+  '2024-09-18': '추석 연휴', '2024-10-01': '임시공휴일(국군의 날)', '2024-10-03': '개천절', '2024-10-09': '한글날', '2024-12-25': '성탄절',
   // 2025
   '2025-01-01': '신정', '2025-01-27': '임시공휴일', '2025-01-28': '설날 연휴', '2025-01-29': '설날', '2025-01-30': '설날 연휴',
   '2025-03-01': '삼일절', '2025-03-03': '대체공휴일(삼일절)', '2025-05-05': '어린이날·부처님오신날', '2025-05-06': '대체공휴일',
@@ -90,6 +95,13 @@ const HOLIDAYS = {
   '2027-08-16': '대체공휴일(광복절)', '2027-09-14': '추석 연휴', '2027-09-15': '추석', '2027-09-16': '추석 연휴', '2027-10-03': '개천절',
   '2027-10-04': '대체공휴일(개천절)', '2027-10-09': '한글날', '2027-10-11': '대체공휴일(한글날)', '2027-12-25': '성탄절', '2027-12-27': '대체공휴일(성탄절)',
 };
+const holidayKindOf = (name) => /대체/.test(name) ? 'substitute' : /임시/.test(name) ? 'temporary' : 'legal';
+const HOLIDAY_KIND_LABEL = { legal: '법정공휴일', substitute: '대체공휴일', temporary: '임시공휴일' };
+
+// 천문연 API 캐시 { year: { at, days: { date: {name, kind} } } }
+const HOL_KEY = 'clinicHolidays.v1';
+let HOL_API = (() => { try { return JSON.parse(localStorage.getItem(HOL_KEY)) || {}; } catch (e) { return {}; } })();
+
 let _extraCache = { src: null, map: {} };
 function extraHolidays() {
   const src = S().extraHolidays || '';
@@ -97,26 +109,73 @@ function extraHolidays() {
     const map = {};
     src.split('\n').forEach((line) => {
       const m = line.trim().match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/);
-      if (m) map[m[1]] = m[2].trim() || '공휴일';
+      if (m) { const name = m[2].trim() || '공휴일'; map[m[1]] = { name, kind: holidayKindOf(name) }; }
     });
     _extraCache = { src, map };
   }
   return _extraCache.map;
 }
-const holidayName = (d) => extraHolidays()[d] || HOLIDAYS[d] || null;
+/* 그날의 공휴일 정보 { name, kind } 또는 null */
+function holidayInfo(d) {
+  const ex = extraHolidays()[d]; if (ex) return ex;
+  const api = HOL_API[d.slice(0, 4)];
+  if (api) return api.days[d] || null; // 공식 데이터가 있는 해는 공식 데이터만 사용
+  return HOLIDAYS[d] ? { name: HOLIDAYS[d], kind: holidayKindOf(HOLIDAYS[d]) } : null;
+}
+const holidayName = (d) => holidayInfo(d)?.name || null;
+const isOptionalHoliday = (d) => { const h = holidayInfo(d); return !!h && h.kind !== 'legal'; };
+const isHolidayOpen = (d) => isOptionalHoliday(d) && S().openHolidays.includes(d);
+const isHolidayOff = (d) => !!holidayInfo(d) && !isHolidayOpen(d);
+function setHolidayOpen(d, open) {
+  const set = new Set(S().openHolidays);
+  if (open) set.add(d); else set.delete(d);
+  DB.settings.openHolidays = [...set].sort(); persist();
+}
+function holidaysInYear(y) {
+  const out = [];
+  for (let d = `${y}-01-01`; d <= `${y}-12-31`; d = addDays(d, 1)) { const h = holidayInfo(d); if (h) out.push({ date: d, ...h }); }
+  return out;
+}
+/* 웹 배포 시 천문연 공휴일을 연 1회(30일 캐시) 갱신. 갱신되면 true */
+let holApiDisabled = false;
+async function refreshHolidays(years) {
+  if (holApiDisabled || !location.protocol.startsWith('http')) return false;
+  let changed = false;
+  for (const y of years) {
+    const c = HOL_API[y];
+    if (c && Date.now() - c.at < 30 * 864e5) continue;
+    try {
+      const r = await fetch(`/api/holidays?year=${y}`);
+      if (r.status === 501 || r.status === 404) { holApiDisabled = true; return changed; }
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (j.days && Object.keys(j.days).length) {
+        // 이름이 '대체공휴일'뿐이면 직전 공휴일 이름을 붙입니다 → 대체공휴일(개천절)
+        for (const [d, h] of Object.entries(j.days)) {
+          if (h.kind !== 'substitute' || /\(/.test(h.name)) continue;
+          for (let k = 1; k <= 7; k++) { const p = j.days[addDays(d, -k)]; if (p && p.kind === 'legal') { h.name = `${h.name}(${p.name.replace(/ 연휴$/, '')})`; break; } }
+        }
+        HOL_API[y] = { at: Date.now(), days: j.days }; changed = true;
+      }
+    } catch (e) { holApiDisabled = true; return changed; }
+  }
+  if (changed) try { localStorage.setItem(HOL_KEY, JSON.stringify(HOL_API)); } catch (e) {}
+  return changed;
+}
+const holidaySource = (y) => HOL_API[y] ? '한국천문연구원 공식 데이터' : '내장 목록';
 
 /* ---------- 날짜 상태 ---------- */
 // 진료일 = 기록이 있고 휴진이 아닌 날. 평균은 진료일만으로 계산합니다.
 const isOpenRec = (r) => !!r && !r.closed;
-const isScheduledClosed = (d) => S().closedWeekdays.includes(weekday(d)) || !!holidayName(d);
+const isScheduledClosed = (d) => S().closedWeekdays.includes(weekday(d)) || isHolidayOff(d);
 function dayStatus(d) {
   const r = DB.daily[d];
   if (r) return r.closed ? 'closed' : 'open';
-  if (holidayName(d)) return 'holiday';
+  if (isHolidayOff(d)) return 'holiday';
   if (S().closedWeekdays.includes(weekday(d))) return 'regular';
   return d > TODAY ? 'future' : 'missing';
 }
-const STATUS_LABEL = { closed: '휴진', holiday: '공휴일', regular: '정기 휴진', missing: '미입력', future: '' };
+const STATUS_LABEL = { closed: '휴진', holiday: '공휴일 휴진', regular: '정기 휴진', missing: '미입력', future: '' };
 
 function openRecords(from, to) {
   return Object.keys(DB.daily).filter((d) => d >= from && d <= to && isOpenRec(DB.daily[d])).sort()
