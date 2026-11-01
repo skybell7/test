@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>우리 병원 운영 통계</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f4f5f3;
+    --surface: #fcfcfb;
+    --text-1: #0b0b0b;
+    --text-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11,11,11,0.12);
+    --accent: #2a78d6;
+    --accent-ink: #ffffff;
+    --s1: #2a78d6;  /* 환자 / 일 매출 */
+    --s2: #eb6834;  /* 보험 환급금 / 신환 */
+    --s3: #1baf7a;  /* 이동평균 / 순이익 */
+    --up: #006300;
+    --down: #d03b3b;
+    --input-bg: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --text-1: #f0efec;
+      --text-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255,255,255,0.12);
+      --accent: #3987e5;
+      --s1: #3987e5;
+      --s2: #d95926;
+      --s3: #199e70;
+      --up: #0ca30c;
+      --down: #e66767;
+      --input-bg: #232322;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-1);
+    font-family: "Malgun Gothic", "Apple SD Gothic Neo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 17px;
+  }
+  header {
+    display: flex; align-items: center; gap: 24px;
+    padding: 16px 32px; background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 22px; margin: 0; white-space: nowrap; }
+  nav { display: flex; gap: 6px; }
+  nav button {
+    font: inherit; font-size: 18px; font-weight: 600; padding: 10px 22px; border-radius: 10px;
+    border: 0; background: transparent; color: var(--text-2); cursor: pointer;
+  }
+  nav button:hover { background: var(--grid); }
+  nav button.active { background: var(--accent); color: var(--accent-ink); }
+  header .spacer { flex: 1; }
+  header .today { color: var(--text-2); font-size: 16px; }
+  main { max-width: 1400px; margin: 0 auto; padding: 28px 32px 64px; }
+  section.tab { display: none; }
+  section.tab.active { display: block; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px 28px;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 20px; }
+  .card .sub { margin: 0 0 18px; color: var(--text-2); font-size: 15px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-input { display: grid; grid-template-columns: 560px 1fr; gap: 24px; align-items: start; }
+
+  /* ---------- 입력 폼 ---------- */
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+  .field label small { font-weight: 400; color: var(--text-2); font-size: 15px; margin-left: 6px; }
+  .big-input {
+    width: 100%; font: inherit; font-size: 30px; font-weight: 700; padding: 12px 16px;
+    border: 2px solid var(--axis); border-radius: 12px; background: var(--input-bg); color: var(--text-1);
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .big-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .input-unit { position: relative; }
+  .input-unit .big-input { padding-right: 64px; }
+  .input-unit span { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); font-size: 22px; color: var(--text-2); pointer-events: none; }
+  .memo-input { width: 100%; font: inherit; font-size: 19px; padding: 12px 16px; border: 2px solid var(--axis); border-radius: 12px; background: var(--input-bg); color: var(--text-1); }
+  .memo-input:focus { outline: none; border-color: var(--accent); }
+  .date-row { display: flex; gap: 8px; align-items: center; }
+  .date-row input[type=date], .date-row input[type=month] { flex: 1; font: inherit; font-size: 24px; font-weight: 700; padding: 10px 14px; border: 2px solid var(--axis); border-radius: 12px; background: var(--input-bg); color: var(--text-1); }
+  .btn {
+    font: inherit; font-size: 17px; font-weight: 600; padding: 10px 16px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-1); white-space: nowrap;
+  }
+  .btn:hover { background: var(--grid); }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); border: 0; font-size: 22px; padding: 16px; width: 100%; font-weight: 700; }
+  .btn-primary:hover { filter: brightness(1.08); background: var(--accent); }
+  .btn-danger { color: var(--down); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .status { min-height: 26px; margin-top: 12px; font-size: 17px; font-weight: 600; }
+  .status.ok { color: var(--up); }
+  .status.err { color: var(--down); }
+  .badge { display: inline-block; font-size: 14px; padding: 3px 10px; border-radius: 999px; background: var(--grid); color: var(--text-2); margin-left: 8px; vertical-align: middle; font-weight: 600; }
+  .hint { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+  /* ---------- 표 ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 16px; }
+  th, td { padding: 10px 12px; border-bottom: 1px solid var(--grid); text-align: right; font-variant-numeric: tabular-nums; }
+  th { color: var(--text-2); font-weight: 600; background: var(--surface); position: sticky; top: 0; }
+  th:first-child, td:first-child, td.left, th.left { text-align: left; }
+  tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  td .link { color: var(--accent); cursor: pointer; font-weight: 600; background: none; border: 0; font: inherit; padding: 0 4px; }
+  td .link.del { color: var(--down); }
+  .table-wrap { max-height: 560px; overflow: auto; }
+  .sun { color: var(--down); }
+  .sat { color: var(--accent); }
+
+  /* ---------- 대시보드 ---------- */
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 20px; }
+  .filters .btn.active { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .filters input[type=date] { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--input-bg); color: var(--text-1); }
+  .filters .range-label { margin-left: auto; color: var(--text-2); font-size: 15px; }
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 20px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+  .kpi .label { color: var(--text-2); font-size: 15px; font-weight: 600; }
+  .kpi .value { font-size: 32px; font-weight: 800; margin: 6px 0 4px; letter-spacing: -0.5px; }
+  .kpi .value small { font-size: 18px; font-weight: 600; color: var(--text-2); margin-left: 2px; }
+  .kpi .delta { font-size: 14px; color: var(--muted); }
+  .kpi .delta.up { color: var(--up); }
+  .kpi .delta.down { color: var(--down); }
+  .chart-card { margin-bottom: 20px; }
+  .chart-head { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  .chart-head h2 { margin: 0; }
+  .legend { display: flex; gap: 16px; font-size: 14px; color: var(--text-2); margin-left: auto; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .legend i.line { height: 3px; border-radius: 2px; vertical-align: 3px; width: 16px; }
+  .legend i.dash { height: 0; border-top: 2px dashed; background: none !important; vertical-align: 3px; width: 16px; border-radius: 0; }
+  .chart { width: 100%; height: 300px; position: relative; margin-top: 10px; }
+  .chart svg { display: block; overflow: visible; }
+  .chart .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+  .insights { margin: 0; padding-left: 22px; line-height: 1.9; font-size: 17px; }
+  .insights b { font-weight: 700; }
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 100; display: none;
+    background: var(--surface); color: var(--text-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.15); min-width: 150px;
+  }
+  #tooltip .t-title { font-weight: 700; margin-bottom: 6px; }
+  #tooltip .t-row { display: flex; gap: 10px; justify-content: space-between; align-items: center; font-variant-numeric: tabular-nums; }
+  #tooltip .t-row i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+  #tooltip .t-row span:last-child { font-weight: 700; }
+
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  input[type=file] { display: none; }
+
+  @media (max-width: 1100px) {
+    .grid-input, .grid-2 { grid-template-columns: 1fr; }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media print {
+    header nav, .filters .btn, .filters input, .no-print { display: none !important; }
+    body { background: #fff; }
+    .card, .kpi { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏥 우리 병원 운영 통계</h1>
+  <nav>
+    <button data-tab="daily" class="active">① 일일 입력</button>
+    <button data-tab="monthly">② 월말 정산</button>
+    <button data-tab="dash">③ 통계 대시보드</button>
+    <button data-tab="data">④ 데이터 관리</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="today" id="todayLabel"></div>
+</header>
+
+<main>
+  <!-- ================= ① 일일 입력 ================= -->
+  <section class="tab active" id="tab-daily">
+    <div class="grid-input">
+      <div class="card">
+        <h2>하루 기록 입력 <span class="badge" id="dailyMode">새 기록</span></h2>
+        <p class="sub">숫자만 입력한 뒤 <b>Enter</b>를 누르면 다음 칸으로 이동하고, 마지막 칸에서 Enter를 누르면 저장됩니다.</p>
+
+        <div class="field">
+          <label>날짜</label>
+          <div class="date-row">
+            <button class="btn" id="prevDay" title="전날">◀</button>
+            <input type="date" id="dDate">
+            <button class="btn" id="nextDay" title="다음날">▶</button>
+            <button class="btn" id="goToday">오늘</button>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label>총 내원 환자</label>
+            <div class="input-unit"><input class="big-input num" id="dPatients" inputmode="numeric" autocomplete="off"><span>명</span></div>
+          </div>
+          <div class="field">
+            <label>그중 신규 환자 <small>선택</small></label>
+            <div class="input-unit"><input class="big-input num" id="dNew" inputmode="numeric" autocomplete="off"><span>명</span></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>일 매출 <small>당일 수납 총액 (본인부담금 + 비급여)</small></label>
+          <div class="input-unit"><input class="big-input num" id="dRevenue" inputmode="numeric" autocomplete="off"><span>원</span></div>
+        </div>
+
+        <div class="field">
+          <label>그중 비급여 매출 <small>선택</small></label>
+          <div class="input-unit"><input class="big-input num" id="dNonCovered" inputmode="numeric" autocomplete="off"><span>원</span></div>
+        </div>
+
+        <div class="field">
+          <label>메모 <small>선택 · 예: 폭설, 원장 학회, 독감 접종 시작</small></label>
+          <input class="memo-input" id="dMemo" autocomplete="off">
+        </div>
+
+        <button class="btn-primary btn" id="saveDaily">저장하기</button>
+        <div class="status" id="dailyStatus"></div>
+        <p class="hint">※ 환자 이름·연락처 같은 개인정보는 입력하지 않습니다. 기록은 이 PC의 브라우저에만 저장됩니다(④ 데이터 관리에서 백업하세요).</p>
+      </div>
+
+      <div class="card">
+        <h2>최근 14일 기록</h2>
+        <p class="sub">날짜를 누르면 해당 날짜를 수정할 수 있습니다.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>날짜</th><th>환자</th><th>신환</th><th>일 매출</th><th>1인당</th><th class="left">메모</th></tr></thead>
+            <tbody id="recentBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ② 월말 정산 ================= -->
+  <section class="tab" id="tab-monthly">
+    <div class="grid-input">
+      <div class="card">
+        <h2>월말 정산 입력 <span class="badge" id="monthlyMode">새 기록</span></h2>
+        <p class="sub">보험 환급금(공단 지급액)과 월 지출을 입력하면 월 총수입·순이익을 계산합니다.</p>
+
+        <div class="field">
+          <label>정산 월</label>
+          <div class="date-row">
+            <button class="btn" id="prevMonth">◀</button>
+            <input type="month" id="mMonth">
+            <button class="btn" id="nextMonth">▶</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>보험 환급금 <small>건강보험공단 등 지급액</small></label>
+          <div class="input-unit"><input class="big-input num" id="mInsurance" inputmode="numeric" autocomplete="off"><span>원</span></div>
+        </div>
+
+        <p class="sub" style="margin-top:6px"><b>월 지출</b> (선택 · 순이익 계산용)</p>
+        <div class="row2">
+          <div class="field">
+            <label>인건비</label>
+            <div class="input-unit"><input class="big-input num" id="mLabor" inputmode="numeric" autocomplete="off"><span>원</span></div>
+          </div>
+          <div class="field">
+            <label>임대료·관리비</label>
+            <div class="input-unit"><input class="big-input num" id="mRent" inputmode="numeric" autocomplete="off"><span>원</span></div>
+          </div>
+          <div class="field">
+            <label>재료·약품비</label>
+            <div class="input-unit"><input class="big-input num" id="mSupplies" inputmode="numeric" autocomplete="off"><span>원</span></div>
+          </div>
+          <div class="field">
+            <label>기타 지출</label>
+            <div class="input-unit"><input class="big-input num" id="mOther" inputmode="numeric" autocomplete="off"><span>원</span></div>
+          </div>
+        </div>
+
+        <button class="btn-primary btn" id="saveMonthly">저장하기</button>
+        <div class="status" id="monthlyStatus"></div>
+      </div>
+
+      <div class="card">
+        <h2 id="monthSummaryTitle">이번 달 요약</h2>
+        <p class="sub">일일 입력 기록과 월말 정산을 합산한 결과입니다.</p>
+        <table>
+          <tbody id="monthSummary"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ③ 대시보드 ================= -->
+  <section class="tab" id="tab-dash">
+    <div class="filters" id="filters">
+      <button class="btn" data-range="7">최근 7일</button>
+      <button class="btn active" data-range="30">최근 30일</button>
+      <button class="btn" data-range="90">최근 90일</button>
+      <button class="btn" data-range="mtd">이번 달</button>
+      <button class="btn" data-range="ytd">올해</button>
+      <button class="btn" data-range="all">전체</button>
+      <input type="date" id="fFrom"> ~ <input type="date" id="fTo">
+      <button class="btn" id="applyRange">적용</button>
+      <button class="btn no-print" id="printBtn">🖨 인쇄 / PDF</button>
+      <span class="range-label" id="rangeLabel"></span>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="card chart-card">
+      <div class="chart-head">
+        <h2>일별 환자 추이</h2>
+        <div class="legend">
+          <span><i class="line" style="background:var(--s1)"></i>내원 환자</span>
+          <span><i class="dash" style="border-color:var(--s3)"></i>7일 이동평균</span>
+        </div>
+      </div>
+      <div class="chart" id="chDaily"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card chart-card">
+        <div class="chart-head"><h2>요일별 평균 환자 수</h2></div>
+        <div class="chart" id="chWeekdayPatients"></div>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-head"><h2>요일별 평균 매출</h2></div>
+        <div class="chart" id="chWeekdayRevenue"></div>
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="chart-head">
+        <h2>월별 총수입 (일 매출 + 보험 환급금)</h2>
+        <div class="legend">
+          <span><i style="background:var(--s1)"></i>일 매출 합계</span>
+          <span><i style="background:var(--s2)"></i>보험 환급금</span>
+        </div>
+      </div>
+      <p class="sub" style="margin:4px 0 0">선택 기간에 걸친 월 단위로 집계됩니다.</p>
+      <div class="chart" id="chMonthly"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card chart-card">
+        <div class="chart-head">
+          <h2>월별 환자 수</h2>
+          <div class="legend">
+            <span><i style="background:var(--s1)"></i>재진</span>
+            <span><i style="background:var(--s2)"></i>신규</span>
+          </div>
+        </div>
+        <div class="chart" id="chMonthlyPatients"></div>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-head"><h2>월별 순이익 (총수입 − 지출)</h2></div>
+        <p class="sub" style="margin:4px 0 0">월말 정산에서 지출을 입력한 달만 표시됩니다.</p>
+        <div class="chart" id="chProfit"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>한눈에 보는 분석</h2>
+      <p class="sub">선택 기간 데이터를 바탕으로 자동 생성됩니다.</p>
+      <ul class="insights" id="insights"></ul>
+    </div>
+  </section>
+
+  <!-- ================= ④ 데이터 관리 ================= -->
+  <section class="tab" id="tab-data">
+    <div class="card" style="margin-bottom:20px">
+      <h2>백업 및 내보내기</h2>
+      <p class="sub">데이터는 이 PC 브라우저에만 저장되므로, 주기적으로 백업 파일을 저장해 두세요. 다른 PC로 옮길 때도 백업 → 불러오기를 사용합니다.</p>
+      <div class="toolbar">
+        <button class="btn" id="exportJson">💾 백업 파일 저장</button>
+        <label class="btn" for="importJson">📂 백업 파일 불러오기</label>
+        <input type="file" id="importJson" accept=".json,application/json">
+        <button class="btn" id="exportCsv">📊 엑셀용 CSV 내보내기</button>
+        <button class="btn" id="sampleData">🧪 예시 데이터 채우기</button>
+        <button class="btn btn-danger" id="clearAll">🗑 전체 삭제</button>
+      </div>
+      <div class="status" id="dataStatus"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>일일 기록 전체 <span class="badge" id="dailyCount"></span></h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>날짜</th><th>환자</th><th>신환</th><th>일 매출</th><th>비급여</th><th></th></tr></thead>
+            <tbody id="allDailyBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>월말 정산 전체 <span class="badge" id="monthlyCount"></span></h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>월</th><th>보험 환급금</th><th>지출 합계</th><th>순이익</th><th></th></tr></thead>
+            <tbody id="allMonthlyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="tooltip"></div>
+
+<script>
+/* =====================================================================
+   저장소 (브라우저 localStorage)
+   ===================================================================== */
+const KEY = 'clinicStats.v1';
+let DB = load();
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (d && d.daily && d.monthly) return d;
+  } catch (e) {}
+  return { daily: {}, monthly: {} };
+}
+function persist() { localStorage.setItem(KEY, JSON.stringify(DB)); }
+
+/* =====================================================================
+   유틸
+   ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const WD = ['일', '월', '화', '수', '목', '금', '토'];
+const WD_ORDER = [1, 2, 3, 4, 5, 6, 0]; // 월~일
+const pad = (n) => String(n).padStart(2, '0');
+const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const ym = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+const parseYmd = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (s, n) => { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d); };
+const fmt = (n) => (n == null || isNaN(n)) ? '-' : Math.round(n).toLocaleString('ko-KR');
+const won = (n) => (n == null || isNaN(n)) ? '-' : fmt(n) + '원';
+function man(n) { // 축/요약용 짧은 표기
+  if (n == null || isNaN(n)) return '-';
+  const a = Math.abs(n);
+  if (a >= 1e8) return (n / 1e8).toFixed(a >= 1e9 ? 0 : 1).replace(/\.0$/, '') + '억';
+  if (a >= 1e4) return fmt(n / 1e4) + '만';
+  return fmt(n);
+}
+const numVal = (el) => { const v = el.value.replace(/[^\d]/g, ''); return v === '' ? null : Number(v); };
+const setNum = (el, v) => { el.value = (v == null || v === '') ? '' : Number(v).toLocaleString('ko-KR'); };
+const wdLabel = (s) => { const w = parseYmd(s).getDay(); const cls = w === 0 ? 'sun' : w === 6 ? 'sat' : ''; return `<span class="${cls}">${s.slice(5).replace('-', '/')} (${WD[w]})</span>`; };
+const sum = (arr, f) => arr.reduce((a, x) => a + (f(x) || 0), 0);
+const escapeHtml = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// 숫자 입력칸: 자동 쉼표
+document.querySelectorAll('.num').forEach((el) => {
+  el.addEventListener('input', () => {
+    const v = el.value.replace(/[^\d]/g, '');
+    el.value = v === '' ? '' : Number(v).toLocaleString('ko-KR');
+  });
+  el.addEventListener('focus', () => el.select());
+});
+
+function flash(el, msg, ok = true) {
+  el.textContent = msg; el.className = 'status ' + (ok ? 'ok' : 'err');
+  clearTimeout(el._t); el._t = setTimeout(() => { el.textContent = ''; }, 3500);
+}
+
+/* =====================================================================
+   탭
+   ===================================================================== */
+document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+function showTab(name) {
+  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('section.tab').forEach((s) => s.classList.toggle('active', s.id === 'tab-' + name));
+  if (name === 'dash') renderDashboard();
+  if (name === 'data') renderDataTables();
+  if (name === 'monthly') loadMonthly();
+  if (name === 'daily') { renderRecent(); $('dPatients').focus(); }
+}
+
+/* =====================================================================
+   ① 일일 입력
+   ===================================================================== */
+const dailyFields = ['dPatients', 'dNew', 'dRevenue', 'dNonCovered', 'dMemo'];
+const today = ymd(new Date());
+$('todayLabel').textContent = `오늘 ${today.replace(/-/g, '.')} (${WD[new Date().getDay()]})`;
+$('dDate').value = today;
+
+function loadDaily() {
+  const r = DB.daily[$('dDate').value];
+  setNum($('dPatients'), r?.patients);
+  setNum($('dNew'), r?.newPatients);
+  setNum($('dRevenue'), r?.revenue);
+  setNum($('dNonCovered'), r?.nonCovered);
+  $('dMemo').value = r?.memo || '';
+  $('dailyMode').textContent = r ? '기존 기록 수정' : '새 기록';
+}
+$('dDate').addEventListener('change', loadDaily);
+$('prevDay').onclick = () => { $('dDate').value = addDays($('dDate').value || today, -1); loadDaily(); };
+$('nextDay').onclick = () => { $('dDate').value = addDays($('dDate').value || today, 1); loadDaily(); };
+$('goToday').onclick = () => { $('dDate').value = today; loadDaily(); };
+
+dailyFields.forEach((id, i) => {
+  $(id).addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    e.preventDefault();
+    if (i < dailyFields.length - 1) $(dailyFields[i + 1]).focus();
+    else saveDaily();
+  });
+});
+$('saveDaily').onclick = saveDaily;
+
+function saveDaily() {
+  const date = $('dDate').value;
+  const st = $('dailyStatus');
+  if (!date) return flash(st, '날짜를 선택해 주세요.', false);
+  const patients = numVal($('dPatients'));
+  const revenue = numVal($('dRevenue'));
+  const newPatients = numVal($('dNew'));
+  const nonCovered = numVal($('dNonCovered'));
+  if (patients == null) { $('dPatients').focus(); return flash(st, '총 내원 환자 수를 입력해 주세요.', false); }
+  if (revenue == null) { $('dRevenue').focus(); return flash(st, '일 매출을 입력해 주세요. (매출이 없으면 0)', false); }
+  if (newPatients != null && newPatients > patients) { $('dNew').focus(); return flash(st, '신규 환자 수가 총 환자 수보다 많습니다.', false); }
+  if (nonCovered != null && nonCovered > revenue) { $('dNonCovered').focus(); return flash(st, '비급여 매출이 일 매출보다 많습니다.', false); }
+  DB.daily[date] = { patients, newPatients, revenue, nonCovered, memo: $('dMemo').value.trim() };
+  persist();
+  flash(st, `✔ ${date} 기록이 저장되었습니다.`);
+  renderRecent();
+  // 다음 날로 자동 이동 (오늘 이전 기록을 몰아서 입력할 때 편리)
+  if (date < today) { $('dDate').value = addDays(date, 1); loadDaily(); }
+  else loadDaily();
+  $('dPatients').focus();
+}
+
+function renderRecent() {
+  const rows = [];
+  for (let i = 0; i < 14; i++) {
+    const d = addDays(today, -i);
+    const r = DB.daily[d];
+    rows.push(`<tr><td><button class="link" data-date="${d}">${wdLabel(d)}</button></td>
+      <td>${r ? fmt(r.patients) : '<span style="color:var(--muted)">-</span>'}</td>
+      <td>${r ? fmt(r.newPatients) : ''}</td>
+      <td>${r ? fmt(r.revenue) : ''}</td>
+      <td>${r && r.patients ? fmt(r.revenue / r.patients) : ''}</td>
+      <td class="left">${r ? escapeHtml(r.memo) : ''}</td></tr>`);
+  }
+  $('recentBody').innerHTML = rows.join('');
+  $('recentBody').querySelectorAll('button[data-date]').forEach((b) => b.onclick = () => { $('dDate').value = b.dataset.date; loadDaily(); $('dPatients').focus(); });
+}
+
+/* =====================================================================
+   ② 월말 정산
+   ===================================================================== */
+const monthlyFields = ['mInsurance', 'mLabor', 'mRent', 'mSupplies', 'mOther'];
+(() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); $('mMonth').value = ym(d); })(); // 기본: 지난달
+function shiftMonth(n) { const [y, m] = $('mMonth').value.split('-').map(Number); $('mMonth').value = ym(new Date(y, m - 1 + n, 1)); loadMonthly(); }
+$('prevMonth').onclick = () => shiftMonth(-1);
+$('nextMonth').onclick = () => shiftMonth(1);
+$('mMonth').addEventListener('change', loadMonthly);
+monthlyFields.forEach((id, i) => {
+  $(id).addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    e.preventDefault();
+    if (i < monthlyFields.length - 1) $(monthlyFields[i + 1]).focus(); else saveMonthly();
+  });
+});
+$('saveMonthly').onclick = saveMonthly;
+
+function loadMonthly() {
+  const r = DB.monthly[$('mMonth').value];
+  setNum($('mInsurance'), r?.insurance);
+  setNum($('mLabor'), r?.labor);
+  setNum($('mRent'), r?.rent);
+  setNum($('mSupplies'), r?.supplies);
+  setNum($('mOther'), r?.other);
+  $('monthlyMode').textContent = r ? '기존 기록 수정' : '새 기록';
+  renderMonthSummary();
+}
+function saveMonthly() {
+  const m = $('mMonth').value; const st = $('monthlyStatus');
+  if (!m) return flash(st, '정산 월을 선택해 주세요.', false);
+  const rec = { insurance: numVal($('mInsurance')), labor: numVal($('mLabor')), rent: numVal($('mRent')), supplies: numVal($('mSupplies')), other: numVal($('mOther')) };
+  if (Object.values(rec).every((v) => v == null)) return flash(st, '입력된 값이 없습니다.', false);
+  DB.monthly[m] = rec; persist();
+  flash(st, `✔ ${m} 정산이 저장되었습니다.`);
+  loadMonthly();
+}
+function monthAgg(m) {
+  const days = Object.keys(DB.daily).filter((d) => d.startsWith(m)).map((d) => DB.daily[d]);
+  const mr = DB.monthly[m] || {};
+  const revenue = sum(days, (r) => r.revenue);
+  const insurance = mr.insurance || 0;
+  const expenseKeys = ['labor', 'rent', 'supplies', 'other'];
+  const hasExpense = expenseKeys.some((k) => mr[k] != null);
+  const expense = sum(expenseKeys, (k) => mr[k]);
+  const patients = sum(days, (r) => r.patients);
+  return {
+    month: m, days: days.length, patients, newPatients: sum(days, (r) => r.newPatients),
+    revenue, nonCovered: sum(days, (r) => r.nonCovered), insurance, hasInsurance: mr.insurance != null,
+    income: revenue + insurance, expense, hasExpense, profit: revenue + insurance - expense,
+  };
+}
+function renderMonthSummary() {
+  const m = $('mMonth').value; if (!m) return;
+  const a = monthAgg(m);
+  $('monthSummaryTitle').textContent = `${m.replace('-', '년 ')}월 요약`;
+  const row = (k, v, strong) => `<tr><td class="left">${k}</td><td style="${strong ? 'font-weight:800;font-size:19px' : ''}">${v}</td></tr>`;
+  $('monthSummary').innerHTML = [
+    row('진료일수', a.days + '일'),
+    row('총 내원 환자', fmt(a.patients) + '명'),
+    row('일평균 환자', a.days ? (a.patients / a.days).toFixed(1) + '명' : '-'),
+    row('신규 환자', fmt(a.newPatients) + '명'),
+    row('일 매출 합계', won(a.revenue)),
+    row('　└ 비급여', won(a.nonCovered)),
+    row('보험 환급금', a.hasInsurance ? won(a.insurance) : '<span style="color:var(--muted)">미입력</span>'),
+    row('월 총수입', won(a.income), true),
+    row('환자 1인당 총수입', a.patients ? won(a.income / a.patients) : '-'),
+    row('지출 합계', a.hasExpense ? won(a.expense) : '<span style="color:var(--muted)">미입력</span>'),
+    row('순이익', a.hasExpense ? won(a.profit) : '-', true),
+    row('순이익률', a.hasExpense && a.income ? (a.profit / a.income * 100).toFixed(1) + '%' : '-'),
+  ].join('');
+}
+
+/* =====================================================================
+   ③ 대시보드
+   ===================================================================== */
+let range = { preset: '30' };
+document.querySelectorAll('#filters [data-range]').forEach((b) => b.onclick = () => {
+  range = { preset: b.dataset.range };
+  document.querySelectorAll('#filters [data-range]').forEach((x) => x.classList.toggle('active', x === b));
+  renderDashboard();
+});
+$('applyRange').onclick = () => {
+  if (!$('fFrom').value || !$('fTo').value) return;
+  range = { preset: 'custom', from: $('fFrom').value, to: $('fTo').value };
+  document.querySelectorAll('#filters [data-range]').forEach((x) => x.classList.remove('active'));
+  renderDashboard();
+};
+$('printBtn').onclick = () => window.print();
+
+function resolveRange() {
+  const keys = Object.keys(DB.daily).sort();
+  let to = today, from;
+  switch (range.preset) {
+    case '7': from = addDays(today, -6); break;
+    case '30': from = addDays(today, -29); break;
+    case '90': from = addDays(today, -89); break;
+    case 'mtd': from = today.slice(0, 8) + '01'; break;
+    case 'ytd': from = today.slice(0, 5) + '01-01'; break;
+    case 'all': from = keys[0] || today; to = keys[keys.length - 1] > today ? keys[keys.length - 1] : today; break;
+    case 'custom': from = range.from; to = range.to; if (from > to) [from, to] = [to, from]; break;
+  }
+  return { from, to };
+}
+function daysBetween(from, to) { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) out.push(d); return out; }
+function recordsIn(from, to) { return Object.keys(DB.daily).filter((d) => d >= from && d <= to).sort().map((d) => ({ date: d, ...DB.daily[d] })); }
+
+function renderDashboard() {
+  const { from, to } = resolveRange();
+  $('fFrom').value = from; $('fTo').value = to;
+  const span = daysBetween(from, to).length;
+  $('rangeLabel').textContent = `${from.replace(/-/g, '.')} ~ ${to.replace(/-/g, '.')} (${span}일)`;
+  const recs = recordsIn(from, to);
+  // 비교 기간: 바로 직전 같은 길이
+  const pTo = addDays(from, -1), pFrom = addDays(from, -span);
+  const prev = recordsIn(pFrom, pTo);
+
+  renderKpis(recs, prev, from, to);
+  renderDailyChart(from, to, recs);
+  renderWeekdayCharts(recs);
+  renderMonthlyCharts(from, to);
+  renderInsights(recs, prev, from, to);
+}
+
+function kpiData(recs) {
+  const patients = sum(recs, (r) => r.patients);
+  const revenue = sum(recs, (r) => r.revenue);
+  const newP = sum(recs, (r) => r.newPatients);
+  return { days: recs.length, patients, revenue, newP, avg: recs.length ? patients / recs.length : null, perPatient: patients ? revenue / patients : null, newRate: patients ? newP / patients * 100 : null };
+}
+function deltaHtml(cur, prev, unit = '%') {
+  if (cur == null || prev == null || prev === 0) return '<div class="delta">이전 기간 비교 데이터 없음</div>';
+  const pct = (cur - prev) / prev * 100;
+  if (Math.abs(pct) < 0.05) return '<div class="delta">이전 기간과 동일</div>';
+  const up = pct > 0;
+  return `<div class="delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}${unit} <span style="color:var(--muted)">이전 기간 대비</span></div>`;
+}
+function renderKpis(recs, prev) {
+  const c = kpiData(recs), p = kpiData(prev);
+  const tile = (label, value, unit, delta) => `<div class="kpi"><div class="label">${label}</div><div class="value">${value}<small>${unit}</small></div>${delta}</div>`;
+  $('kpis').innerHTML = [
+    tile('총 내원 환자', fmt(c.patients), '명', deltaHtml(c.patients, p.patients)),
+    tile('일평균 환자 (진료일 기준)', c.avg == null ? '-' : c.avg.toFixed(1), '명', deltaHtml(c.avg, p.avg)),
+    tile('일 매출 합계', man(c.revenue), '원', deltaHtml(c.revenue, p.revenue)),
+    tile('환자 1인당 수납액', c.perPatient == null ? '-' : fmt(c.perPatient), '원', deltaHtml(c.perPatient, p.perPatient)),
+    tile('신규 환자 비율', c.newRate == null ? '-' : c.newRate.toFixed(1), '%', `<div class="delta">신규 ${fmt(c.newP)}명 · 진료일 ${c.days}일</div>`),
+  ].join('');
+}
+
+function renderDailyChart(from, to, recs) {
+  const days = daysBetween(from, to);
+  const map = Object.fromEntries(recs.map((r) => [r.date, r]));
+  const vals = days.map((d) => map[d] ? map[d].patients : null);
+  // 7일 이동평균 (기록된 진료일 기준, 직전 7일 창)
+  const ma = days.map((d, i) => {
+    const win = []; for (let k = Math.max(0, i - 6); k <= i; k++) if (vals[k] != null) win.push(vals[k]);
+    return win.length >= 3 ? win.reduce((a, b) => a + b, 0) / win.length : null;
+  });
+  lineChart($('chDaily'), {
+    labels: days,
+    xLabel: (d) => { const dt = parseYmd(d); return `${dt.getMonth() + 1}/${dt.getDate()}`; },
+    tipTitle: (d) => `${d.replace(/-/g, '.')} (${WD[parseYmd(d).getDay()]})` + (map[d]?.memo ? ` · ${map[d].memo}` : ''),
+    series: [
+      { name: '내원 환자', color: 'var(--s1)', values: vals, fmt: (v) => fmt(v) + '명', dots: days.length <= 120 },
+      { name: '7일 이동평균', color: 'var(--s3)', values: ma, fmt: (v) => v.toFixed(1) + '명', dashed: true },
+    ],
+    yFmt: fmt,
+  });
+}
+
+function renderWeekdayCharts(recs) {
+  const by = WD_ORDER.map((w) => recs.filter((r) => parseYmd(r.date).getDay() === w));
+  const labels = WD_ORDER.map((w) => WD[w] + '요일');
+  barChart($('chWeekdayPatients'), {
+    labels, yFmt: fmt,
+    series: [{ name: '평균 환자', color: 'var(--s1)', values: by.map((g) => g.length ? sum(g, (r) => r.patients) / g.length : null), fmt: (v) => v.toFixed(1) + '명' }],
+    extraTip: (i) => `<div class="t-row"><span>진료일수</span><span>${by[i].length}일</span></div>`,
+    valueLabels: (v) => v.toFixed(1),
+  });
+  barChart($('chWeekdayRevenue'), {
+    labels, yFmt: man,
+    series: [{ name: '평균 매출', color: 'var(--s1)', values: by.map((g) => g.length ? sum(g, (r) => r.revenue) / g.length : null), fmt: won }],
+    extraTip: (i) => `<div class="t-row"><span>진료일수</span><span>${by[i].length}일</span></div>`,
+    valueLabels: (v) => man(v),
+  });
+}
+
+function monthsBetween(from, to) {
+  const out = []; let [y, m] = from.split('-').map(Number); const [ty, tm] = to.split('-').map(Number);
+  while (y < ty || (y === ty && m <= tm)) { out.push(`${y}-${pad(m)}`); m++; if (m > 12) { m = 1; y++; } }
+  return out;
+}
+function renderMonthlyCharts(from, to) {
+  const months = monthsBetween(from, to);
+  const aggs = months.map(monthAgg);
+  const lbl = (m) => `${Number(m.slice(5))}월` + (months.length > 12 || m.slice(5) === '01' || m === months[0] ? `\n${m.slice(0, 4)}` : '');
+  barChart($('chMonthly'), {
+    labels: months, xLabel: lbl, stacked: true, yFmt: man,
+    series: [
+      { name: '일 매출 합계', color: 'var(--s1)', values: aggs.map((a) => a.days ? a.revenue : null), fmt: won },
+      { name: '보험 환급금', color: 'var(--s2)', values: aggs.map((a) => a.hasInsurance ? a.insurance : null), fmt: won },
+    ],
+    extraTip: (i) => `<div class="t-row"><span><b>총수입</b></span><span>${won(aggs[i].income)}</span></div>`,
+    valueLabels: (v, i) => man(aggs[i].income),
+  });
+  barChart($('chMonthlyPatients'), {
+    labels: months, xLabel: lbl, stacked: true, yFmt: fmt,
+    series: [
+      { name: '재진', color: 'var(--s1)', values: aggs.map((a) => a.days ? a.patients - a.newPatients : null), fmt: (v) => fmt(v) + '명' },
+      { name: '신규', color: 'var(--s2)', values: aggs.map((a) => a.days ? a.newPatients : null), fmt: (v) => fmt(v) + '명' },
+    ],
+    extraTip: (i) => `<div class="t-row"><span><b>합계</b></span><span>${fmt(aggs[i].patients)}명</span></div>`,
+    valueLabels: (v, i) => fmt(aggs[i].patients),
+  });
+  barChart($('chProfit'), {
+    labels: months, xLabel: lbl, yFmt: man,
+    series: [{ name: '순이익', color: 'var(--s3)', values: aggs.map((a) => a.hasExpense ? a.profit : null), fmt: won }],
+    extraTip: (i) => aggs[i].hasExpense ? `<div class="t-row"><span>총수입</span><span>${won(aggs[i].income)}</span></div><div class="t-row"><span>지출</span><span>${won(aggs[i].expense)}</span></div>` : '',
+    valueLabels: (v) => man(v),
+  });
+}
+
+function renderInsights(recs, prev, from, to) {
+  const out = [];
+  if (!recs.length) { $('insights').innerHTML = '<li>선택 기간에 입력된 기록이 없습니다. ① 일일 입력에서 기록을 추가하거나, ④ 데이터 관리에서 예시 데이터를 채워 보세요.</li>'; return; }
+  const by = WD_ORDER.map((w) => ({ w, g: recs.filter((r) => parseYmd(r.date).getDay() === w) })).filter((x) => x.g.length);
+  const avgs = by.map((x) => ({ w: x.w, avg: sum(x.g, (r) => r.patients) / x.g.length }));
+  const allAvg = sum(recs, (r) => r.patients) / recs.length;
+  if (avgs.length >= 2) {
+    const hi = avgs.reduce((a, b) => b.avg > a.avg ? b : a), lo = avgs.reduce((a, b) => b.avg < a.avg ? b : a);
+    out.push(`가장 붐비는 요일은 <b>${WD[hi.w]}요일</b>(평균 ${hi.avg.toFixed(1)}명), 가장 한산한 요일은 <b>${WD[lo.w]}요일</b>(평균 ${lo.avg.toFixed(1)}명)입니다. 인력 배치·점심시간 조정에 참고하세요.`);
+  }
+  const best = recs.reduce((a, b) => b.patients > a.patients ? b : a);
+  out.push(`최다 환자일은 <b>${best.date.replace(/-/g, '.')} (${WD[parseYmd(best.date).getDay()]})</b> ${fmt(best.patients)}명입니다${best.memo ? ` — 메모: “${escapeHtml(best.memo)}”` : ''}.`);
+  const bestRev = recs.reduce((a, b) => b.revenue > a.revenue ? b : a);
+  out.push(`최고 매출일은 <b>${bestRev.date.replace(/-/g, '.')}</b> ${won(bestRev.revenue)}입니다.`);
+  const nc = sum(recs, (r) => r.nonCovered), rev = sum(recs, (r) => r.revenue);
+  if (nc > 0 && rev > 0) out.push(`일 매출 중 비급여 비중은 <b>${(nc / rev * 100).toFixed(1)}%</b>입니다.`);
+  if (prev.length) {
+    const pAvg = sum(prev, (r) => r.patients) / prev.length;
+    const diff = (allAvg - pAvg) / pAvg * 100;
+    out.push(`일평균 환자는 직전 같은 기간보다 <b>${Math.abs(diff).toFixed(1)}% ${diff >= 0 ? '증가' : '감소'}</b>했습니다 (${pAvg.toFixed(1)}명 → ${allAvg.toFixed(1)}명).`);
+  }
+  const low = recs.filter((r) => r.patients < allAvg * 0.6);
+  if (low.length) out.push(`평균보다 40% 이상 적은 날이 <b>${low.length}일</b> 있었습니다: ${low.slice(-5).map((r) => r.date.slice(5).replace('-', '/') + (r.memo ? `(${escapeHtml(r.memo)})` : '')).join(', ')}${low.length > 5 ? ' 외' : ''}.`);
+  // 이번 달 예상
+  const curM = today.slice(0, 7);
+  if (to >= today && from <= today) {
+    const mRecs = Object.keys(DB.daily).filter((d) => d.startsWith(curM) && d <= today).map((d) => DB.daily[d]);
+    if (mRecs.length >= 5) {
+      const [y, m] = curM.split('-').map(Number);
+      const last = new Date(y, m, 0).getDate();
+      const rest = daysBetween(addDays(today, 1), `${curM}-${pad(last)}`);
+      // 남은 날 중 과거 기록상 진료하던 요일만 반영
+      const openW = new Set(Object.keys(DB.daily).map((d) => parseYmd(d).getDay()));
+      const restOpen = rest.filter((d) => openW.has(parseYmd(d).getDay())).length;
+      const perDay = sum(mRecs, (r) => r.revenue) / mRecs.length;
+      const proj = sum(mRecs, (r) => r.revenue) + perDay * restOpen;
+      out.push(`이번 달 현재 추세라면 월말 일 매출 합계는 약 <b>${man(proj)}원</b>으로 예상됩니다 (남은 진료일 ${restOpen}일 가정, 보험 환급금 제외).`);
+    }
+  }
+  $('insights').innerHTML = out.map((s) => `<li>${s}</li>`).join('');
+}
+
+/* =====================================================================
+   차트 (SVG, 외부 라이브러리 없음)
+   ===================================================================== */
+const SVGNS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function niceTicks(max, count = 5) {
+  if (!(max > 0)) return [0, 1];
+  const raw = max / count, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw);
+  const ticks = []; for (let v = 0; v <= max + step * 0.001; v += step) ticks.push(v);
+  if (ticks[ticks.length - 1] < max) ticks.push(ticks[ticks.length - 1] + step);
+  return ticks;
+}
+function niceTicksSigned(min, max) {
+  if (min >= 0) return niceTicks(max);
+  const span = max - min, raw = span / 5, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw);
+  const lo = Math.floor(min / step) * step, hi = Math.ceil(Math.max(max, 0) / step) * step;
+  const t = []; for (let v = lo; v <= hi + step * 0.001; v += step) t.push(Math.round(v / step) * step);
+  return t;
+}
+const tip = $('tooltip');
+function showTip(evt, html) {
+  tip.innerHTML = html; tip.style.display = 'block';
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = evt.clientX + 16, y = evt.clientY + 16;
+  if (x + w > window.innerWidth - 8) x = evt.clientX - w - 16;
+  if (y + h > window.innerHeight - 8) y = evt.clientY - h - 16;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+function hideTip() { tip.style.display = 'none'; }
+const tipRow = (color, name, val) => `<div class="t-row"><span><i style="background:${color}"></i>${name}</span><span>${val}</span></div>`;
+
+function frame(container, ticks, yFmt, labels, xLabel) {
+  container.innerHTML = '';
+  const W = container.clientWidth || 600, H = container.clientHeight || 300;
+  const m = { t: 22, r: 12, b: 44, l: 56 };
+  const svg = el('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, container);
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const yMin = ticks[0], yMax = ticks[ticks.length - 1];
+  const y = (v) => m.t + ih - (v - yMin) / (yMax - yMin || 1) * ih;
+  ticks.forEach((t) => {
+    el('line', { x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), stroke: t === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 }, svg);
+    const tx = el('text', { x: m.l - 8, y: y(t) + 4, 'text-anchor': 'end', 'font-size': 12, fill: 'var(--muted)', style: 'font-variant-numeric:tabular-nums' }, svg);
+    tx.textContent = yFmt(t);
+  });
+  return { svg, W, H, m, iw, ih, y };
+}
+function drawXLabels(f, labels, xLabel, xc, maxLabels) {
+  const n = labels.length, every = Math.max(1, Math.ceil(n / maxLabels));
+  labels.forEach((l, i) => {
+    if (i % every !== 0 && i !== n - 1) return;
+    if (i === n - 1 && i % every !== 0 && (n - 1) % every < every * 0.6) return;
+    const lines = (xLabel ? xLabel(l) : l).split('\n');
+    lines.forEach((t, j) => {
+      const tx = el('text', { x: xc(i), y: f.m.t + f.ih + 18 + j * 15, 'text-anchor': 'middle', 'font-size': j ? 11 : 12, fill: 'var(--muted)' }, f.svg);
+      tx.textContent = t;
+    });
+  });
+}
+function emptyMsg(container, msg = '표시할 데이터가 없습니다') {
+  const d = document.createElement('div'); d.className = 'empty'; d.textContent = msg; container.appendChild(d);
+}
+
+function lineChart(container, o) {
+  container._render = () => lineChart(container, o);
+  const all = o.series.flatMap((s) => s.values).filter((v) => v != null);
+  const ticks = niceTicks(Math.max(...all, 0) * 1.05 || 10);
+  const f = frame(container, ticks, o.yFmt);
+  const n = o.labels.length;
+  const x = (i) => f.m.l + (n === 1 ? f.iw / 2 : i / (n - 1) * f.iw);
+  drawXLabels(f, o.labels, o.xLabel, x, Math.floor(f.iw / 56));
+  if (!all.length) return emptyMsg(container);
+
+  o.series.slice().reverse().forEach((s) => {
+    let d = '', pen = false;
+    s.values.forEach((v, i) => { if (v == null) return; /* 휴진일은 건너뛰고 이어 그림 */ d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + f.y(v).toFixed(1); pen = true; });
+    el('path', { d, fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'stroke-dasharray': s.dashed ? '6 5' : '' }, f.svg);
+    if (s.dots) s.values.forEach((v, i) => { if (v != null) el('circle', { cx: x(i), cy: f.y(v), r: 3, fill: s.color, stroke: 'var(--surface)', 'stroke-width': 1.5 }, f.svg); });
+  });
+  // 크로스헤어 + 툴팁
+  const cross = el('line', { y1: f.m.t, y2: f.m.t + f.ih, stroke: 'var(--axis)', 'stroke-width': 1, visibility: 'hidden' }, f.svg);
+  const marks = o.series.map((s) => el('circle', { r: 5, fill: s.color, stroke: 'var(--surface)', 'stroke-width': 2, visibility: 'hidden' }, f.svg));
+  const hit = el('rect', { x: f.m.l - 6, y: f.m.t, width: f.iw + 12, height: f.ih, fill: 'transparent' }, f.svg);
+  hit.addEventListener('mousemove', (e) => {
+    const r = f.svg.getBoundingClientRect();
+    const i = Math.max(0, Math.min(n - 1, Math.round((e.clientX - r.left - f.m.l) / (f.iw || 1) * (n - 1))));
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+    let rows = '';
+    o.series.forEach((s, k) => {
+      const v = s.values[i];
+      if (v == null) { marks[k].setAttribute('visibility', 'hidden'); return; }
+      marks[k].setAttribute('cx', x(i)); marks[k].setAttribute('cy', f.y(v)); marks[k].setAttribute('visibility', 'visible');
+      rows += tipRow(s.color, s.name, s.fmt(v));
+    });
+    showTip(e, `<div class="t-title">${o.tipTitle ? o.tipTitle(o.labels[i]) : o.labels[i]}</div>${rows || '<div style="color:var(--muted)">기록 없음 (휴진)</div>'}`);
+  });
+  hit.addEventListener('mouseleave', () => { hideTip(); cross.setAttribute('visibility', 'hidden'); marks.forEach((mk) => mk.setAttribute('visibility', 'hidden')); });
+}
+
+function barPath(x, y0, y1, w, r) {
+  // y0 = 기준선, y1 = 끝. 끝 쪽 모서리만 둥글게
+  const up = y1 <= y0, h = Math.abs(y0 - y1); r = Math.min(r, h, w / 2);
+  if (h < 0.5) return '';
+  if (up) return `M${x},${y0}V${y1 + r}Q${x},${y1} ${x + r},${y1}H${x + w - r}Q${x + w},${y1} ${x + w},${y1 + r}V${y0}Z`;
+  return `M${x},${y0}V${y1 - r}Q${x},${y1} ${x + r},${y1}H${x + w - r}Q${x + w},${y1} ${x + w},${y1 - r}V${y0}Z`;
+}
+function barChart(container, o) {
+  container._render = () => barChart(container, o);
+  const n = o.labels.length;
+  const totals = o.labels.map((_, i) => o.stacked ? o.series.reduce((a, s) => a + (s.values[i] || 0), 0) : Math.max(...o.series.map((s) => s.values[i] ?? -Infinity)));
+  const vals = o.series.flatMap((s) => s.values).filter((v) => v != null);
+  const minV = Math.min(0, ...vals), maxV = Math.max(0, ...(o.stacked ? totals : vals));
+  const ticks = niceTicksSigned(minV * 1.05, maxV * 1.1 || 10);
+  const f = frame(container, ticks, o.yFmt);
+  const band = f.iw / n, bw = Math.min(56, band * 0.62);
+  const xc = (i) => f.m.l + band * i + band / 2;
+  drawXLabels(f, o.labels, o.xLabel, xc, Math.floor(f.iw / 44));
+  if (!vals.length) return emptyMsg(container);
+  const y0 = f.y(0);
+
+  o.labels.forEach((_, i) => {
+    const g = el('g', {}, f.svg);
+    let acc = 0; const present = o.series.map((s) => s.values[i]).filter((v) => v != null && v !== 0);
+    let top = y0;
+    o.series.forEach((s, k) => {
+      const v = s.values[i]; if (v == null || v === 0) return;
+      const isLast = s === o.series.filter((ss) => ss.values[i] != null && ss.values[i] !== 0).slice(-1)[0];
+      const a = f.y(acc), b = f.y(acc + v);
+      // 스택 사이 2px 간격
+      const gapA = acc !== 0 ? 1 : 0, gapB = isLast ? 0 : 1;
+      const ya = v >= 0 ? a - gapA : a + gapA, yb = v >= 0 ? b + gapB : b - gapB;
+      const d = isLast ? barPath(xc(i) - bw / 2, ya, yb, bw, 4) : `M${xc(i) - bw / 2},${ya}V${yb}H${xc(i) + bw / 2}V${ya}Z`;
+      if (d) el('path', { d, fill: s.color }, g);
+      if (o.stacked) acc += v; top = Math.min(top, b);
+      if (!o.stacked) top = b;
+    });
+    if (o.valueLabels && present.length && n <= 14) {
+      const v = o.stacked ? totals[i] : o.series[0].values[i];
+      const neg = v < 0;
+      const t = el('text', { x: xc(i), y: neg ? f.y(v) + 16 : top - 6, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 600, fill: 'var(--text-2)' }, f.svg);
+      t.textContent = o.valueLabels(v, i);
+    }
+    // 히트 영역 (막대보다 넓게)
+    const hit = el('rect', { x: f.m.l + band * i, y: f.m.t, width: band, height: f.ih, fill: 'transparent' }, f.svg);
+    hit.addEventListener('mousemove', (e) => {
+      g.style.opacity = 0.8;
+      let rows = o.series.map((s) => s.values[i] == null ? '' : tipRow(s.color, s.name, s.fmt(s.values[i]))).join('');
+      if (!rows) rows = '<div style="color:var(--muted)">기록 없음</div>';
+      const title = (o.xLabel ? o.xLabel(o.labels[i]).split('\n').reverse().join(' ') : o.labels[i]);
+      showTip(e, `<div class="t-title">${title}</div>${rows}${o.extraTip && o.series.some((s) => s.values[i] != null) ? o.extraTip(i) : ''}`);
+    });
+    hit.addEventListener('mouseleave', () => { g.style.opacity = 1; hideTip(); });
+  });
+}
+let rT; window.addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(() => document.querySelectorAll('.chart').forEach((c) => c._render && c._render()), 150); });
+
+/* =====================================================================
+   ④ 데이터 관리
+   ===================================================================== */
+function renderDataTables() {
+  const dk = Object.keys(DB.daily).sort().reverse();
+  $('dailyCount').textContent = dk.length + '건';
+  $('allDailyBody').innerHTML = dk.map((d) => { const r = DB.daily[d]; return `<tr><td>${d.slice(0, 4)}/${wdLabel(d)}</td><td>${fmt(r.patients)}</td><td>${fmt(r.newPatients)}</td><td>${fmt(r.revenue)}</td><td>${fmt(r.nonCovered)}</td>
+    <td><button class="link" data-edit-d="${d}">수정</button><button class="link del" data-del-d="${d}">삭제</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="left" style="color:var(--muted)">기록 없음</td></tr>';
+  const mk = Object.keys(DB.monthly).sort().reverse();
+  $('monthlyCount').textContent = mk.length + '건';
+  $('allMonthlyBody').innerHTML = mk.map((m) => { const a = monthAgg(m); return `<tr><td>${m}</td><td>${a.hasInsurance ? fmt(a.insurance) : '-'}</td><td>${a.hasExpense ? fmt(a.expense) : '-'}</td><td>${a.hasExpense ? fmt(a.profit) : '-'}</td>
+    <td><button class="link" data-edit-m="${m}">수정</button><button class="link del" data-del-m="${m}">삭제</button></td></tr>`; }).join('') || '<tr><td colspan="5" class="left" style="color:var(--muted)">기록 없음</td></tr>';
+  document.querySelectorAll('[data-edit-d]').forEach((b) => b.onclick = () => { $('dDate').value = b.dataset.editD; loadDaily(); showTab('daily'); });
+  document.querySelectorAll('[data-del-d]').forEach((b) => b.onclick = () => { if (confirm(`${b.dataset.delD} 기록을 삭제할까요?`)) { delete DB.daily[b.dataset.delD]; persist(); renderDataTables(); } });
+  document.querySelectorAll('[data-edit-m]').forEach((b) => b.onclick = () => { $('mMonth').value = b.dataset.editM; showTab('monthly'); });
+  document.querySelectorAll('[data-del-m]').forEach((b) => b.onclick = () => { if (confirm(`${b.dataset.delM} 정산을 삭제할까요?`)) { delete DB.monthly[b.dataset.delM]; persist(); renderDataTables(); } });
+}
+function download(name, text, type) {
+  const blob = new Blob([text], { type }); const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('exportJson').onclick = () => download(`병원통계_백업_${today}.json`, JSON.stringify(DB, null, 2), 'application/json');
+$('importJson').onchange = (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const d = JSON.parse(rd.result);
+      if (!d.daily || !d.monthly) throw new Error('형식 오류');
+      if (!confirm(`백업 파일을 불러옵니다 (일일 ${Object.keys(d.daily).length}건, 월말 ${Object.keys(d.monthly).length}건).\n같은 날짜의 기존 기록은 백업 내용으로 바뀝니다. 계속할까요?`)) return;
+      Object.assign(DB.daily, d.daily); Object.assign(DB.monthly, d.monthly); persist();
+      renderDataTables(); flash($('dataStatus'), '✔ 백업 파일을 불러왔습니다.');
+    } catch (err) { flash($('dataStatus'), '백업 파일을 읽을 수 없습니다.', false); }
+    e.target.value = '';
+  };
+  rd.readAsText(file, 'UTF-8');
+};
+$('exportCsv').onclick = () => {
+  const lines = ['날짜,요일,내원환자,신규환자,일매출,비급여매출,메모'];
+  Object.keys(DB.daily).sort().forEach((d) => { const r = DB.daily[d]; lines.push([d, WD[parseYmd(d).getDay()], r.patients ?? '', r.newPatients ?? '', r.revenue ?? '', r.nonCovered ?? '', `"${(r.memo || '').replace(/"/g, '""')}"`].join(',')); });
+  lines.push('', '월,일매출합계,보험환급금,인건비,임대료관리비,재료약품비,기타지출,총수입,순이익');
+  const months = [...new Set([...Object.keys(DB.monthly), ...Object.keys(DB.daily).map((d) => d.slice(0, 7))])].sort();
+  months.forEach((m) => { const a = monthAgg(m), r = DB.monthly[m] || {}; lines.push([m, a.revenue, r.insurance ?? '', r.labor ?? '', r.rent ?? '', r.supplies ?? '', r.other ?? '', a.income, a.hasExpense ? a.profit : ''].join(',')); });
+  download(`병원통계_${today}.csv`, '﻿' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+};
+$('sampleData').onclick = () => {
+  if (Object.keys(DB.daily).length && !confirm('예시 데이터를 기존 기록에 덮어써서 채웁니다(최근 6개월). 계속할까요?')) return;
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const base = { 1: 78, 2: 62, 3: 58, 4: 60, 5: 66, 6: 48 }; // 요일별 평균 (일요일 휴진)
+  const start = addDays(today, -183);
+  for (let d = start; d <= today; d = addDays(d, 1)) {
+    const w = parseYmd(d).getDay(); if (w === 0) continue;
+    const month = parseYmd(d).getMonth();
+    const season = (month === 11 || month <= 1) ? 1.15 : (month >= 6 && month <= 7 ? 0.9 : 1);
+    const p = Math.round(base[w] * season * (0.82 + rnd() * 0.36));
+    const np = Math.round(p * (0.08 + rnd() * 0.1));
+    const per = 11000 + rnd() * 7000;
+    const rev = Math.round(p * per / 100) * 100;
+    const nc = Math.round(rev * (0.15 + rnd() * 0.2) / 100) * 100;
+    DB.daily[d] = { patients: p, newPatients: np, revenue: rev, nonCovered: nc, memo: rnd() < 0.03 ? '폭우' : '' };
+  }
+  monthsBetween(start, addDays(today.slice(0, 8) + '01', -1)).forEach((m) => {
+    const a = monthAgg(m);
+    DB.monthly[m] = { insurance: Math.round(a.patients * 17500 / 1000) * 1000, labor: 23000000, rent: 6500000, supplies: Math.round(a.patients * 1800 / 1000) * 1000, other: 2400000 };
+  });
+  persist(); renderDataTables(); flash($('dataStatus'), '✔ 최근 6개월 예시 데이터를 채웠습니다. ③ 통계 대시보드에서 확인해 보세요.');
+};
+$('clearAll').onclick = () => {
+  if (!confirm('모든 기록을 삭제합니다. 되돌릴 수 없습니다. 먼저 백업하셨나요?\n\n계속하려면 확인을 누르세요.')) return;
+  DB = { daily: {}, monthly: {} }; persist(); renderDataTables(); flash($('dataStatus'), '모든 기록을 삭제했습니다.');
+};
+
+/* 시작 */
+loadDaily(); renderRecent(); loadMonthly();
+$('dPatients').focus();
+</script>
+</body>
+</html>
