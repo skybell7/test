@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>입장 — 우리 병원 운영 통계</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f4f5f3; color: #0b0b0b;
+         font-family: "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+  .box { background: #fcfcfb; border: 1px solid rgba(11,11,11,.12); border-radius: 16px; padding: 40px 44px; width: 440px; }
+  h1 { margin: 0 0 6px; font-size: 26px; }
+  p { margin: 0 0 24px; color: #52514e; }
+  input { width: 100%; box-sizing: border-box; font: inherit; font-size: 26px; padding: 14px 16px; border: 2px solid #c3c2b7; border-radius: 12px; letter-spacing: 2px; }
+  input:focus { outline: none; border-color: #2a78d6; }
+  button { margin-top: 16px; width: 100%; font: inherit; font-size: 22px; font-weight: 700; padding: 14px; border: 0; border-radius: 12px; background: #2a78d6; color: #fff; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: wait; }
+  .err { color: #d03b3b; font-weight: 600; min-height: 24px; margin-top: 12px; }
+</style>
+</head>
+<body>
+  <form class="box" id="f">
+    <h1>🏥 우리 병원 운영 통계</h1>
+    <p>입장 key를 입력해 주세요.</p>
+    <input type="password" id="key" autocomplete="current-password" autofocus placeholder="입장 key">
+    <button id="btn">입장</button>
+    <div class="err" id="err"></div>
+  </form>
+<script>
+  document.getElementById('f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btn'), err = document.getElementById('err');
+    btn.disabled = true; err.textContent = '';
+    try {
+      const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: document.getElementById('key').value }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) { location.href = '/clinic/'; return; }
+      err.textContent = d.error || '입장할 수 없습니다.';
+    } catch (_) { err.textContent = '서버에 연결할 수 없습니다.'; }
+    btn.disabled = false; document.getElementById('key').select();
+  });
+</script>
+</body>
+</html>
