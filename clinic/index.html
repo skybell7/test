@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>우리 병원 운영 통계</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <h1>🏥 우리 병원 운영 통계</h1>
+  <nav>
+    <button data-tab="daily" class="active">① 일일 입력</button>
+    <button data-tab="monthly">② 월말 정산</button>
+    <button data-tab="dash">③ 통계 대시보드</button>
+    <button data-tab="report">④ 월간 리포트</button>
+    <button data-tab="settings">⑤ 설정·백업</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="today" id="todayLabel"></div>
+  <button class="btn" id="logoutBtn" hidden>나가기</button>
+</header>
+
+<main>
+  <!-- ================= ① 일일 입력 ================= -->
+  <section class="tab active" id="tab-daily">
+    <div class="grid-input">
+      <div class="card">
+        <h2>하루 기록 입력 <span class="badge" id="dailyMode">새 기록</span></h2>
+        <p class="sub">숫자를 입력하고 <b>Enter</b>를 누르면 다음 칸으로 이동하고, 마지막 칸에서 Enter를 누르면 저장됩니다.</p>
+
+        <div class="field">
+          <span class="lbl">날짜</span>
+          <div class="date-row">
+            <button class="btn" id="prevDay" title="전날">◀</button>
+            <input type="date" id="dDate">
+            <button class="btn" id="nextDay" title="다음날">▶</button>
+            <button class="btn" id="goToday">오늘</button>
+          </div>
+          <div class="day-info" id="dayInfo"></div>
+        </div>
+
+        <div id="closedBox" class="closed-box" hidden>
+          <b>🚪 휴진으로 기록된 날입니다</b>
+          <span class="muted" id="closedMemo"></span><br><br>
+          <button class="btn" id="cancelClosed">휴진 취소하고 진료 기록 입력</button>
+        </div>
+
+        <div id="openForm">
+          <div class="row2">
+            <div class="field">
+              <label for="dPatients">총 내원 환자</label>
+              <div class="input-unit"><input class="big-input num" id="dPatients" inputmode="numeric" autocomplete="off"><span>명</span></div>
+            </div>
+            <div class="field">
+              <label for="dNew">그중 신규 환자 <small>선택</small></label>
+              <div class="input-unit"><input class="big-input num" id="dNew" inputmode="numeric" autocomplete="off"><span>명</span></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="lbl">결제수단별 수납액 <small>본인부담금 + 비급여, 해당 없으면 비워 두세요</small></span>
+            <div class="row3">
+              <div><label for="dCard" class="muted" style="font-size:15px;margin-bottom:4px">💳 카드</label>
+                <div class="input-unit"><input class="big-input mid num" id="dCard" inputmode="numeric" autocomplete="off"><span>원</span></div></div>
+              <div><label for="dCash" class="muted" style="font-size:15px;margin-bottom:4px">💵 현금</label>
+                <div class="input-unit"><input class="big-input mid num" id="dCash" inputmode="numeric" autocomplete="off"><span>원</span></div></div>
+              <div><label for="dTransfer" class="muted" style="font-size:15px;margin-bottom:4px">🏦 계좌이체</label>
+                <div class="input-unit"><input class="big-input mid num" id="dTransfer" inputmode="numeric" autocomplete="off"><span>원</span></div></div>
+            </div>
+          </div>
+          <div class="total-line"><span class="lbl">일 매출 합계</span><b id="dTotal">0원</b></div>
+
+          <div class="field">
+            <label for="dNonCovered">그중 비급여 매출 <small>선택</small></label>
+            <div class="input-unit"><input class="big-input num" id="dNonCovered" inputmode="numeric" autocomplete="off"><span>원</span></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="dMemo">메모 <small>선택 · 예: 원장 학회, 독감 접종 시작 (환자 정보 X)</small></label>
+          <input class="memo-input" id="dMemo" autocomplete="off">
+        </div>
+
+        <div class="btn-row">
+          <button class="btn-primary btn" id="saveDaily">저장하기</button>
+          <button class="btn btn-closed" id="markClosed" title="이 날을 휴진으로 기록합니다. 평균 계산에서 제외됩니다.">🚪 휴진</button>
+        </div>
+        <div class="status" id="dailyStatus"></div>
+        <p class="hint">※ 환자 이름·연락처 같은 개인정보는 입력하지 않습니다. 기록은 이 PC의 브라우저에만 저장됩니다 (⑤ 설정·백업에서 백업하세요).</p>
+      </div>
+
+      <div class="card">
+        <h2>최근 14일 기록</h2>
+        <p class="sub">날짜를 누르면 해당 날짜를 수정할 수 있습니다.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>날짜</th><th>환자</th><th>신환</th><th>일 매출</th><th>1인당</th><th class="left">날씨·메모</th></tr></thead>
+            <tbody id="recentBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ② 월말 정산 ================= -->
+  <section class="tab" id="tab-monthly">
+    <div class="grid-input">
+      <div class="card">
+        <h2>월말 정산 입력 <span class="badge" id="monthlyMode">새 기록</span></h2>
+        <p class="sub">보험 청구액·지급액과 월 지출을 입력하면 삭감률, 총수입, 순이익, 손익분기를 계산합니다.</p>
+
+        <div class="field">
+          <span class="lbl">정산 월</span>
+          <div class="date-row">
+            <button class="btn" id="prevMonth">◀</button>
+            <input type="month" id="mMonth">
+            <button class="btn" id="nextMonth">▶</button>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label for="mClaim">보험 청구액 <small>공단 청구 금액</small></label>
+            <div class="input-unit"><input class="big-input mid num" id="mClaim" inputmode="numeric" autocomplete="off"><span>원</span></div>
+          </div>
+          <div class="field">
+            <label for="mInsurance">보험 지급액 <small>실제 받은 환급금</small></label>
+            <div class="input-unit"><input class="big-input mid num" id="mInsurance" inputmode="numeric" autocomplete="off"><span>원</span></div>
+          </div>
+        </div>
+
+        <p class="sub" style="margin:6px 0 10px"><b>월 지출</b> (선택 · 순이익·손익분기 계산용. 카드 수수료는 설정한 수수료율로 자동 계산됩니다)</p>
+        <div class="row2">
+          <div class="field">
+            <label for="mLabor">인건비 <small>고정비</small></label>
+            <div class="input-unit"><input class="big-input mid num" id="mLabor" inputmode="numeric" autocomplete="off"><span>원</span></div>
+          </div>
+          <div class="field">
+            <label for="mRent">임대료·관리비 <small>고정비</small></label>
+            <div class="input-unit"><input class="big-input mid num" id="mRent" inputmode="numeric" autocomplete="off"><span>원</span></div>
+          </div>
+          <div class="field">
+            <label for="mSupplies">재료·약품비 <small>변동비</small></label>
+            <div class="input-unit"><input class="big-input mid num" id="mSupplies" inputmode="numeric" autocomplete="off"><span>원</span></div>
+          </div>
+          <div class="field">
+            <label for="mOther">기타 지출 <small>고정비</small></label>
+            <div class="input-unit"><input class="big-input mid num" id="mOther" inputmode="numeric" autocomplete="off"><span>원</span></div>
+          </div>
+        </div>
+
+        <button class="btn-primary btn" id="saveMonthly">저장하기</button>
+        <div class="status" id="monthlyStatus"></div>
+      </div>
+
+      <div class="card">
+        <h2 id="monthSummaryTitle">이번 달 요약</h2>
+        <p class="sub">일일 기록과 월말 정산을 합산한 결과입니다.</p>
+        <table><tbody id="monthSummary"></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ③ 대시보드 ================= -->
+  <section class="tab" id="tab-dash">
+    <div class="filters" id="filters">
+      <button class="btn" data-range="7">최근 7일</button>
+      <button class="btn active" data-range="30">최근 30일</button>
+      <button class="btn" data-range="90">최근 90일</button>
+      <button class="btn" data-range="mtd">이번 달</button>
+      <button class="btn" data-range="ytd">올해</button>
+      <button class="btn" data-range="365">최근 1년</button>
+      <button class="btn" data-range="all">전체</button>
+      <input type="date" id="fFrom"> ~ <input type="date" id="fTo">
+      <button class="btn" id="applyRange">적용</button>
+      <button class="btn no-print" id="printBtn">🖨 인쇄 / PDF</button>
+      <span class="range-label" id="rangeLabel"></span>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grid-2">
+      <div class="card chart-card">
+        <h2>이번 달 목표 달성률</h2>
+        <div id="goalBox"></div>
+      </div>
+      <div class="card chart-card">
+        <h2>손익분기 환자 수</h2>
+        <div id="beBox"></div>
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="chart-head">
+        <h2>일별 환자 추이</h2>
+        <div class="legend">
+          <span><i class="line" style="background:var(--s1)"></i>내원 환자</span>
+          <span><i class="dash" style="border-color:var(--s3)"></i>7일 이동평균</span>
+          <span><i style="background:var(--band-holiday)"></i>공휴일</span>
+          <span><i style="background:var(--band-closed)"></i>휴진</span>
+        </div>
+      </div>
+      <p class="sub" style="margin:4px 0 0">점에 마우스를 올리면 그날의 공휴일·날씨·메모가 함께 표시됩니다.</p>
+      <div class="chart" id="chDaily"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card chart-card">
+        <div class="chart-head"><h2>요일별 평균 환자 수</h2></div>
+        <div class="chart" id="chWeekdayPatients"></div>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-head"><h2>요일별 평균 매출</h2></div>
+        <div class="chart" id="chWeekdayRevenue"></div>
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="chart-head">
+        <h2>월별 총수입 (일 매출 + 보험 지급액)</h2>
+        <div class="legend">
+          <span><i style="background:var(--s1)"></i>일 매출 합계</span>
+          <span><i style="background:var(--s2)"></i>보험 지급액</span>
+          <span><i class="dash" style="border-color:var(--text-2)"></i>월 목표</span>
+        </div>
+      </div>
+      <p class="sub" style="margin:4px 0 0">선택 기간에 걸친 월 단위로 집계됩니다.</p>
+      <div class="chart" id="chMonthly"></div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="chart-head">
+        <h2>작년 같은 달과 비교</h2>
+        <div class="legend">
+          <span><i style="background:var(--s1-soft)"></i>작년</span>
+          <span><i style="background:var(--s1)"></i>올해</span>
+        </div>
+        <div class="seg" id="yoyMetric">
+          <button class="btn active" data-m="patients">환자 수</button>
+          <button class="btn" data-m="income">총수입</button>
+          <button class="btn" data-m="revenue">일 매출</button>
+          <button class="btn" data-m="avg">일평균 환자</button>
+        </div>
+      </div>
+      <p class="sub" style="margin:4px 0 0">선택 기간의 각 달을 1년 전 같은 달과 나란히 비교합니다. 독감철 같은 계절 영향을 걸러 볼 수 있습니다.</p>
+      <div class="chart" id="chYoY"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card chart-card">
+        <div class="chart-head">
+          <h2>결제수단 비율</h2>
+          <div class="legend">
+            <span><i style="background:var(--s1)"></i>카드</span>
+            <span><i style="background:var(--s3)"></i>현금</span>
+            <span><i style="background:var(--s4)"></i>계좌이체</span>
+          </div>
+        </div>
+        <div class="pay-summary" id="paySummary"></div>
+        <div class="chart" id="chPay"></div>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-head"><h2>월별 순이익 (총수입 − 지출)</h2></div>
+        <p class="sub" style="margin:4px 0 0">지출(카드 수수료 포함)을 입력한 달만 표시됩니다.</p>
+        <div class="chart" id="chProfit"></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card chart-card">
+        <div class="chart-head">
+          <h2>보험 청구액 vs 지급액</h2>
+          <div class="legend">
+            <span><i style="background:var(--s1-soft)"></i>청구액</span>
+            <span><i style="background:var(--s2)"></i>지급액</span>
+          </div>
+        </div>
+        <div class="chart" id="chClaim"></div>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-head"><h2>보험 삭감률 추이</h2></div>
+        <p class="sub" style="margin:4px 0 0">(청구액 − 지급액) ÷ 청구액</p>
+        <div class="chart" id="chCut"></div>
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="chart-head">
+        <h2>월별 환자 수</h2>
+        <div class="legend">
+          <span><i style="background:var(--s1)"></i>재진</span>
+          <span><i style="background:var(--s2)"></i>신규</span>
+        </div>
+      </div>
+      <div class="chart short" id="chMonthlyPatients"></div>
+    </div>
+
+    <div class="card">
+      <h2>한눈에 보는 분석</h2>
+      <p class="sub">선택 기간 데이터를 바탕으로 자동 생성됩니다.</p>
+      <ul class="insights" id="insights"></ul>
+    </div>
+  </section>
+
+  <!-- ================= ④ 월간 리포트 ================= -->
+  <section class="tab" id="tab-report">
+    <div class="filters no-print">
+      <div class="date-row">
+        <button class="btn" id="rPrev">◀</button>
+        <input type="month" id="rMonth" style="font-size:20px;padding:8px 12px">
+        <button class="btn" id="rNext">▶</button>
+      </div>
+      <button class="btn" id="rAi">✨ AI 해설 생성 (Gemini)</button>
+      <button class="btn" id="rCopy">📋 텍스트 복사</button>
+      <button class="btn" id="rPrint">🖨 인쇄 / PDF</button>
+      <span class="status" id="rStatus" style="margin:0"></span>
+    </div>
+    <div class="report" id="reportBody"></div>
+  </section>
+
+  <!-- ================= ⑤ 설정·백업 ================= -->
+  <section class="tab" id="tab-settings">
+    <div class="grid-2 mb">
+      <div class="card">
+        <h2>병원 설정</h2>
+        <p class="sub">통계 계산에 쓰이는 기본값입니다. 변경 후 저장을 눌러 주세요.</p>
+        <div class="field">
+          <span class="lbl">정기 휴진 요일</span>
+          <div class="check-row" id="sClosedWeekdays"></div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="sCardFee">카드 수수료율</label>
+            <div class="input-unit"><input class="big-input mid" id="sCardFee" inputmode="decimal" autocomplete="off"><span>%</span></div>
+          </div>
+          <div class="field">
+            <label for="sRegion">날씨 지역</label>
+            <select class="text-input" id="sRegion" style="font-size:22px;padding:13px 14px"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="sTarget">월 목표 총수입 <small>일 매출 + 보험 지급액 기준</small></label>
+          <div class="input-unit"><input class="big-input mid num" id="sTarget" inputmode="numeric" autocomplete="off"><span>원</span></div>
+        </div>
+        <div class="field">
+          <label for="sFixed">월 고정비 직접 지정 <small>비워 두면 최근 3개월 인건비·임대료·기타 평균 사용</small></label>
+          <div class="input-unit"><input class="big-input mid num" id="sFixed" inputmode="numeric" autocomplete="off"><span>원</span></div>
+        </div>
+        <div class="field">
+          <label for="sHolidays">추가 공휴일 <small>한 줄에 하나씩 · 이름에 '임시'나 '대체'가 들어가면 진료 여부를 고를 수 있습니다</small></label>
+          <textarea class="text-input" id="sHolidays" placeholder="2026-06-03 임시공휴일"></textarea>
+        </div>
+        <button class="btn-primary btn" id="saveSettings">설정 저장</button>
+        <div class="status" id="settingsStatus"></div>
+        <p class="hint" id="sourceHint"></p>
+        <button class="btn" id="reloadWeather" style="font-size:15px">🔄 날씨 다시 불러오기</button>
+      </div>
+
+      <div class="card">
+        <h2>백업 및 내보내기</h2>
+        <p class="sub">데이터는 이 PC 브라우저에만 저장되므로 주기적으로 백업 파일을 저장해 두세요. 다른 PC로 옮길 때도 백업 → 불러오기를 사용합니다.</p>
+        <div class="toolbar">
+          <button class="btn" id="exportJson">💾 백업 파일 저장</button>
+          <label class="btn" for="importJson">📂 백업 파일 불러오기</label>
+          <input type="file" id="importJson" accept=".json,application/json">
+          <button class="btn" id="exportCsv">📊 엑셀용 CSV 내보내기</button>
+        </div>
+        <div class="toolbar">
+          <button class="btn" id="sampleData">🧪 예시 데이터 채우기 (2년)</button>
+          <button class="btn btn-danger" id="clearAll">🗑 전체 삭제</button>
+        </div>
+        <div class="status" id="dataStatus"></div>
+      </div>
+    </div>
+
+    <div class="card mb">
+      <div class="chart-head">
+        <h2>공휴일 및 진료 여부</h2>
+        <div class="date-row" style="margin-left:auto">
+          <button class="btn" id="hPrev">◀</button>
+          <b id="hYear" style="font-size:20px;min-width:80px;text-align:center"></b>
+          <button class="btn" id="hNext">▶</button>
+        </div>
+      </div>
+      <p class="sub" id="hSource" style="margin-top:6px"></p>
+      <table>
+        <thead><tr><th>날짜</th><th class="left">공휴일</th><th class="left">종류</th><th class="left">진료 여부</th></tr></thead>
+        <tbody id="holidayBody"></tbody>
+      </table>
+      <p class="hint">법정공휴일은 모두 휴진으로 처리합니다. 대체공휴일·임시공휴일은 기본 휴진이며, 진료하는 날은 체크해 주세요 (바로 저장됩니다).<br>
+        진료하는 날로 바꾸면 목표·월말 예상·손익분기 계산에서 진료일로 계산되고, 그래프의 공휴일 음영이 사라집니다.</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>일일 기록 전체 <span class="badge" id="dailyCount"></span></h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>날짜</th><th>환자</th><th>신환</th><th>일 매출</th><th>비급여</th><th></th></tr></thead>
+            <tbody id="allDailyBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>월말 정산 전체 <span class="badge" id="monthlyCount"></span></h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>월</th><th>청구</th><th>지급</th><th>지출</th><th>순이익</th><th></th></tr></thead>
+            <tbody id="allMonthlyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="tooltip"></div>
+
+<script src="js/core.js"></script>
+<script src="js/weather.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/report.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
